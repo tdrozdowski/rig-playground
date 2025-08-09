@@ -1,0 +1,91 @@
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2025-06-18
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {
+      "roots": {
+        "listChanged": true
+      },
+      "sampling": {},
+      "elicitation": {}
+    },
+    "clientInfo": {
+      "name": "ExampleClient",
+      "title": "Example Client Display Name",
+      "version": "1.0.0"
+    }
+  }
+}
+
+> {%
+    client.global.set("session_id", response.headers.valueOf("mcp-session-id"));
+    client.log("mcp-session-id: " + client.global.get("session_id"));
+%}
+
+###
+### Send the required "initialized" notification (no id)
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2025-06-18
+mcp-session-id: {{session_id}}
+
+{
+  "jsonrpc": "2.0",
+  "method": "notifications/initialized"
+}
+
+###
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2025-06-18
+mcp-session-id: {{session_id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list"
+}
+
+###
+
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2025-06-18
+mcp-session-id: {{session_id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "increment"
+  }
+}
+
+> {%
+    // Process each SSE event line as it arrives
+    response.body.onEachLine((eventLine, unsubscribe) => {
+        client.log("SSE event: " + JSON.stringify(eventLine));
+        // Call unsubscribe() to stop processing (connection stays open unless you stop it in UI)
+        unsubscribe();
+    });
+%}
+
+###
