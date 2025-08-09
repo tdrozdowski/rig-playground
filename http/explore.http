@@ -27,8 +27,26 @@ MCP-Protocol-Version: 2025-06-18
 }
 
 > {%
+    // Capture session id from headers
     client.global.set("session_id", response.headers.valueOf("mcp-session-id"));
     client.log("mcp-session-id: " + client.global.get("session_id"));
+
+    // Wait for streamed initialize response and log/output it
+    response.body.onEachLine((eventLine, unsubscribe) => {
+        const line = typeof eventLine === 'string' ? eventLine : (eventLine && eventLine.line) || "";
+        if (!line) return;
+        client.log("initialize SSE: " + line);
+        let jsonText = line.trim();
+        if (!jsonText) return;
+        if (jsonText.startsWith("data:")) jsonText = jsonText.substring(5).trim();
+        let body;
+        try { body = JSON.parse(jsonText); } catch (e) { return; }
+        client.test("initialize responded with jsonrpc 2.0", function() {
+            client.assert(body && body.jsonrpc === "2.0", "initialize jsonrpc missing or not 2.0: " + JSON.stringify(body));
+        });
+        client.log("initialize response body: " + JSON.stringify(body));
+        unsubscribe();
+    });
 %}
 
 ###
@@ -59,20 +77,40 @@ mcp-session-id: {{session_id}}
   "method": "tools/list"
 }
 
-###
+> {%
+    // Wait for streamed tools/list response and output it
+    response.body.onEachLine((eventLine, unsubscribe) => {
+        const line = typeof eventLine === 'string' ? eventLine : (eventLine && eventLine.line) || "";
+        client.log("tools/list SSE: " + line);
+        let jsonText = line.trim();
+        if (!jsonText) return;
+        if (jsonText.startsWith("data:")) jsonText = jsonText.substring(5).trim();
+        let body;
+        try { body = JSON.parse(jsonText); } catch (e) { return; }
+        client.test("tools/list returns expected tools", function() {
+            const tools = (body && body.result && body.result.tools) || [];
+            const names = tools.map(t => t.name);
+            client.assert(Array.isArray(tools), "tools is not an array");
+            client.assert(names.includes("increment"), "tools/list missing 'increment': " + JSON.stringify(names));
+            client.assert(names.includes("calculate"), "tools/list missing 'calculate': " + JSON.stringify(names));
+        });
+        client.log("tools/list response body: " + JSON.stringify(body));
+        unsubscribe();
+    });
+%}
 
+###
 POST http://localhost:8000/mcp
 Content-Type: application/json
 Accept: application/json, text/event-stream
 Cache-Control: no-cache, no-store, must-revalidate
 Pragma: no-cache
-Accept: application/json, text/event-stream
 MCP-Protocol-Version: 2025-06-18
 mcp-session-id: {{session_id}}
 
 {
   "jsonrpc": "2.0",
-  "id": 1,
+  "id": 3,
   "method": "tools/call",
   "params": {
     "name": "increment"
@@ -80,10 +118,205 @@ mcp-session-id: {{session_id}}
 }
 
 > {%
-    // Process each SSE event line as it arrives
+    // Handle streamed SSE response and assert once JSON payload arrives
     response.body.onEachLine((eventLine, unsubscribe) => {
-        client.log("SSE event: " + JSON.stringify(eventLine));
-        // Call unsubscribe() to stop processing (connection stays open unless you stop it in UI)
+        const line = typeof eventLine === 'string' ? eventLine : (eventLine && eventLine.line) || "";
+        client.log("SSE event: " + line);
+        let jsonText = line.trim();
+        if (!jsonText) return;
+        if (jsonText.startsWith("data:")) {
+            jsonText = jsonText.substring(5).trim();
+        }
+        let body;
+        try {
+            body = JSON.parse(jsonText);
+        } catch (e) {
+            return; // not a JSON payload line
+        }
+        client.test("increment #1 returns previous value 0", function() {
+            client.assert(body.jsonrpc === "2.0");
+            const text = body.result && body.result.content && body.result.content[0] && body.result.content[0].text;
+            client.assert(text === "0", "Expected first increment to return previous value '0', got: " + text);
+        });
+        unsubscribe();
+    });
+%}
+
+###
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+MCP-Protocol-Version: 2025-06-18
+mcp-session-id: {{session_id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 4,
+  "method": "tools/call",
+  "params": {
+    "name": "increment"
+  }
+}
+
+> {%
+    response.body.onEachLine((eventLine, unsubscribe) => {
+        const line = typeof eventLine === 'string' ? eventLine : (eventLine && eventLine.line) || "";
+        client.log("SSE event: " + line);
+        let jsonText = line.trim();
+        if (!jsonText) return;
+        if (jsonText.startsWith("data:")) jsonText = jsonText.substring(5).trim();
+        let body;
+        try { body = JSON.parse(jsonText); } catch (e) { return; }
+        client.test("increment #2 returns previous value 1", function() {
+            const text = body.result && body.result.content && body.result.content[0] && body.result.content[0].text;
+            client.assert(text === "1", "Expected second increment to return previous value '1', got: " + text);
+        });
+        unsubscribe();
+    });
+%}
+
+###
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+MCP-Protocol-Version: 2025-06-18
+mcp-session-id: {{session_id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 5,
+  "method": "tools/call",
+  "params": {
+    "name": "increment"
+  }
+}
+
+> {%
+    response.body.onEachLine((eventLine, unsubscribe) => {
+        const line = typeof eventLine === 'string' ? eventLine : (eventLine && eventLine.line) || "";
+        client.log("SSE event: " + line);
+        let jsonText = line.trim();
+        if (!jsonText) return;
+        if (jsonText.startsWith("data:")) jsonText = jsonText.substring(5).trim();
+        let body;
+        try { body = JSON.parse(jsonText); } catch (e) { return; }
+        client.test("increment #3 returns previous value 2", function() {
+            const text = body.result && body.result.content && body.result.content[0] && body.result.content[0].text;
+            client.assert(text === "2", "Expected third increment to return previous value '2', got: " + text);
+        });
+        unsubscribe();
+    });
+%}
+
+###
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+MCP-Protocol-Version: 2025-06-18
+mcp-session-id: {{session_id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 6,
+  "method": "tools/call",
+  "params": {
+    "name": "increment"
+  }
+}
+
+> {%
+    response.body.onEachLine((eventLine, unsubscribe) => {
+        const line = typeof eventLine === 'string' ? eventLine : (eventLine && eventLine.line) || "";
+        client.log("SSE event: " + line);
+        let jsonText = line.trim();
+        if (!jsonText) return;
+        if (jsonText.startsWith("data:")) jsonText = jsonText.substring(5).trim();
+        let body;
+        try { body = JSON.parse(jsonText); } catch (e) { return; }
+        client.test("increment #4 returns previous value 3 (final)", function() {
+            const text = body.result && body.result.content && body.result.content[0] && body.result.content[0].text;
+            client.assert(text === "3", "Expected fourth increment to return previous value '3', got: " + text);
+        });
+        unsubscribe();
+    });
+%}
+
+###
+# Calculator tool: add
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+MCP-Protocol-Version: 2025-06-18
+mcp-session-id: {{session_id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "calculate",
+    "arguments": { "a": 2, "b": 3, "operation": "add" }
+  }
+}
+
+> {%
+    response.body.onEachLine((eventLine, unsubscribe) => {
+        const line = typeof eventLine === 'string' ? eventLine : (eventLine && eventLine.line) || "";
+        client.log("SSE event: " + line);
+        let jsonText = line.trim();
+        if (!jsonText) return;
+        if (jsonText.startsWith("data:")) jsonText = jsonText.substring(5).trim();
+        let body;
+        try { body = JSON.parse(jsonText); } catch (e) { return; }
+        client.test("calculate add returns 5", function() {
+            client.assert(body && body.result && body.result.result === 5, "Expected result 5, got: " + JSON.stringify(body && body.result));
+            client.assert(body && body.result && body.result.operation === "add", "Expected operation 'add'");
+        });
+        unsubscribe();
+    });
+%}
+
+###
+# Calculator tool: multiply
+POST http://localhost:8000/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Cache-Control: no-cache, no-store, must-revalidate
+Pragma: no-cache
+MCP-Protocol-Version: 2025-06-18
+mcp-session-id: {{session_id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tools/call",
+  "params": {
+    "name": "calculate",
+    "arguments": { "a": 2, "b": 3, "operation": "multiply" }
+  }
+}
+
+> {%
+    response.body.onEachLine((eventLine, unsubscribe) => {
+        const line = typeof eventLine === 'string' ? eventLine : (eventLine && eventLine.line) || "";
+        client.log("SSE event: " + line);
+        let jsonText = line.trim();
+        if (!jsonText) return;
+        if (jsonText.startsWith("data:")) jsonText = jsonText.substring(5).trim();
+        let body;
+        try { body = JSON.parse(jsonText); } catch (e) { return; }
+        client.test("calculate multiply returns 6", function() {
+            client.assert(body && body.result && body.result.result === 6, "Expected result 6, got: " + JSON.stringify(body && body.result));
+            client.assert(body && body.result && body.result.operation === "multiply", "Expected operation 'multiply'");
+        });
         unsubscribe();
     });
 %}

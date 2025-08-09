@@ -1,6 +1,22 @@
+//!
+//! Binary entry for Rig Playground MCP servers.
+//!
+//! This binary demonstrates how to run example MCP tools (see [`crate::example_mcp`])
+//! over multiple transports using the `rmcp` crate:
+//! - HTTP JSON-RPC at `/mcp` with streamable responses and stateful sessions (see [`main_http`]).
+//! - Server-Sent Events (SSE) at `/sse` with POST `/message` (see [`main_sse`]).
+//! - stdio transport for embedding into a host process (see [`counter_tool`]).
+//!
+//! Configuration:
+//! - Set `RUST_LOG` to control logging (e.g., `info`, `debug`).
+//! - Default bind address is `127.0.0.1:8000`.
+//!
+//! Switching modes:
+//! - Edit [`main`] to call the desired function: [`main_http`], [`main_sse`], or [`counter_tool`].
+//!
 pub mod example_mcp;
 
-use crate::example_mcp::{Calculator, Counter};
+use crate::example_mcp::ExampleTools;
 use rmcp::service::ServiceExt;
 use rmcp::transport::sse_server::{SseServer, SseServerConfig};
 use rmcp::transport::streamable_http_server::{
@@ -52,8 +68,8 @@ async fn main_sse() -> anyhow::Result<()> {
         }
     });
 
-    // Register the Calculator service
-    let server_ct = sse_server.with_service_directly(Counter::new);
+    // Register the combined tools service
+    let server_ct = sse_server.with_service_directly(ExampleTools::new);
 
     info!("MCP server ready on {}", BIND_ADDRESS);
 
@@ -70,6 +86,22 @@ async fn main_sse() -> anyhow::Result<()> {
 }
 
 #[tokio::main]
+/// Entry point for the example servers.
+///
+/// Environment variables
+/// - RUST_LOG: set the log level for tracing (e.g., "info", "debug").
+///   If unset, defaults to "debug" in this example.
+///
+/// Deployment notes
+/// - The HTTP streamable server binds to BIND_ADDRESS (default: 127.0.0.1:8000)
+///   and exposes a JSON-RPC MCP endpoint at `/mcp`.
+/// - The SSE server variant (if enabled) binds to the same address and uses
+///   `/sse` for server-sent events and `/message` for POST messages.
+///
+/// Switching modes
+/// - By default, this binary runs the HTTP streamable server (main_http).
+/// - To run the SSE server or the stdio tool server, uncomment the respective
+///   lines below.
 async fn main() -> anyhow::Result<()> {
     //counter_tool().await
     //main_sse().await
@@ -85,8 +117,8 @@ async fn counter_tool() -> anyhow::Result<()> {
 
     tracing::info!("Starting MCP server");
 
-    // Create an instance of our counter router
-    let service = Counter::new().serve(stdio()).await.inspect_err(|e| {
+    // Create an instance of our combined tools router
+    let service = ExampleTools::new().serve(stdio()).await.inspect_err(|e| {
         tracing::error!("serving error: {:?}", e);
     })?;
 
@@ -119,16 +151,14 @@ async fn main_http() -> anyhow::Result<()> {
     info!("Starting MCP HTTP (streamable) server...");
 
     // Cancellation for graceful shutdown
-    let ct = CancellationToken::new();
-    let child_ct = ct.child_token();
     let config = StreamableHttpServerConfig {
-        sse_keep_alive: Some(std::time::Duration::from_secs(10)),
+        sse_keep_alive: None,
         stateful_mode: true,
     };
     // Create the HTTP streamable service and its Axum router
     // Exposes a single JSON-RPC endpoint at /mcp that supports streamable responses
     let service = StreamableHttpService::new(
-        || Ok(Counter::new()),
+        || Ok(ExampleTools::new()),
         LocalSessionManager::default().into(),
         config,
     );
