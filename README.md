@@ -1,20 +1,17 @@
 # Rig Playground
 
-Minimal MCP (Model Context Protocol) server examples built with the `rmcp` crate. The project demonstrates how to expose simple tools over different transports:
+Minimal MCP (Model Context Protocol) server example built with the `rmcp` crate. This project exposes simple tools over a single transport:
 
-- HTTP JSON‑RPC with streamable responses (`/mcp`)
-- Server‑Sent Events (SSE) + POST messaging (`/sse`, `/message`)
-- stdio (for embedding within a host process)
+- HTTP JSON‑RPC with streamable responses at `/mcp` (stateful sessions)
 
 The example tools are intentionally small so you can focus on the server wiring:
 
 - Counter (stateful): increments an in‑memory counter and returns the previous value
 - Calculator (stateless): performs basic arithmetic (add, multiply)
 
-Project code contains rich rustdoc. See:
-- src/lib.rs for a crate overview
-- src/example_mcp.rs for full tool documentation and types
-- src/main.rs for server entry points, environment variables, and endpoints
+Project code contains rustdoc. See:
+- mcp/src/example_mcp.rs for tool documentation and types
+- mcp/src/main.rs for server entry point, environment variables, and endpoint details
 
 
 ## Contents
@@ -22,8 +19,6 @@ Project code contains rich rustdoc. See:
 - Running the HTTP (streamable) server (default)
 - Exploring with the included HTTP requests
 - Calling tools over HTTP (curl examples)
-- Switching to SSE server mode
-- Running the stdio server
 - Logging and troubleshooting
 - Development
 
@@ -36,7 +31,7 @@ Install and run the HTTP server (default mode):
 
 ```bash
 # From project root
-cargo run
+cargo run -p mcp
 ```
 
 This starts an HTTP server on 127.0.0.1:8000, exposing the JSON‑RPC MCP endpoint at:
@@ -48,17 +43,16 @@ The server uses stateful sessions and supports streamable responses.
 
 ## Running the HTTP (streamable) server (default)
 The default binary entry point is `main_http()`:
-- Binds to 127.0.0.1:8000 (see BIND_ADDRESS in src/main.rs)
+- Binds to 127.0.0.1:8000 (see BIND_ADDRESS in mcp/src/main.rs)
 - Exposes a single JSON‑RPC endpoint at `/mcp`
 - Uses a LocalSessionManager with stateful sessions enabled
-- Sends periodic SSE keep‑alives (10s)
 
 Environment:
 - RUST_LOG controls verbosity (defaults to `debug` in code if unset)
 
 Example:
 ```bash
-RUST_LOG=info cargo run
+RUST_LOG=info cargo run -p mcp
 ```
 
 
@@ -156,41 +150,8 @@ Notes:
 - The exact request envelope follows the MCP JSON‑RPC used by `rmcp`.
 
 
-## Switching to SSE server mode
-`src/main.rs` contains an SSE example (`main_sse()`) that binds to the same address and exposes:
-- SSE stream at `/sse`
-- POST message endpoint at `/message`
-
-To use it, edit `main()` in `src/main.rs` and switch the call:
-```rust
-async fn main() -> anyhow::Result<()> {
-    // counter_tool().await
-    main_sse().await
-    // main_http().await
-}
-```
-Then run:
-```bash
-cargo run
-```
-
-
-## Running the stdio server
-Also in `src/main.rs`, `counter_tool()` runs the Counter tool over stdio using `rmcp::transport::stdio()`.
-
-Switch `main()` to run it:
-```rust
-async fn main() -> anyhow::Result<()> {
-    counter_tool().await
-    // main_sse().await
-    // main_http().await
-}
-```
-Then run:
-```bash
-cargo run
-```
-This mode is intended for embedding into a host that speaks MCP over stdio.
+## Notes on other transports
+The crate depends on `rmcp` features that can enable other transports (e.g., SSE, stdio), but this repository’s binary currently implements only the HTTP streamable server at `/mcp`. Future iterations may wire up additional transports.
 
 
 ## Logging and troubleshooting
@@ -198,17 +159,17 @@ This project uses `tracing` and `tracing-subscriber`.
 - Set RUST_LOG to control verbosity, e.g. `RUST_LOG=info` or `RUST_LOG=debug`.
 - Logs include lifecycle messages like server bind, shutdown, and tool calls.
 
-If ports are busy, change `BIND_ADDRESS` in `src/main.rs`.
+If ports are busy, change `BIND_ADDRESS` in `mcp/src/main.rs`.
 
 
 ## Development
 - Build: `cargo build`
-- Run: `cargo run`
+- Run: `cargo run -p mcp`
 - Format: `cargo fmt`
 - Lint: `cargo clippy`
 
 Key dependencies:
-- rmcp = 0.5 (server, schemars, macros, transport-sse-server, transport-io, transport-streamable-http-server)
+- rmcp = 0.5 (server, schemars, macros, transport-streamable-http-server)
 - axum = 0.8, tokio = 1, tracing, serde/serde_json
 
 Project modules:

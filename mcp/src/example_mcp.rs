@@ -5,8 +5,9 @@
 //! - `Counter`: a stateful tool that increments an in-memory counter.
 //! - `Calculator`: a stateless tool that performs basic arithmetic.
 //!
-//! Both tools implement `ServerHandler` via macros provided by `rmcp`, and can be
-//! served over stdio, SSE, or an HTTP JSON-RPC endpoint as shown in `main.rs`.
+//! Both tools implement `ServerHandler` via macros provided by `rmcp`.
+//! In this repository, they are exposed via the streamable HTTP JSON-RPC
+//! endpoint at `/mcp` (see `main.rs`).
 
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::Parameters;

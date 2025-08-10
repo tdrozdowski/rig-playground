@@ -1,0 +1,13 @@
+[package]
+name = "agent"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "agent"
+path = "src/lib.rs"
+
+[dependencies]
+rig-core = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
